@@ -49,27 +49,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             setCalendars(data.calendars);
             setActiveCalendarId(data.calendars[0].id);
           }
+          return;
         }
       } catch (e) {
-        console.error("Failed to fetch data:", e);
-      } finally {
-        setIsLoading(false);
+        console.warn("Server unavailable, falling back to local storage:", e);
       }
+      
+      // Fallback to local storage
+      const localData = localStorage.getItem('eisenhower_data');
+      if (localData) {
+        try {
+          const data: AppData = JSON.parse(localData);
+          if (data.tasks) setTasks(data.tasks);
+          if (data.calendars && data.calendars.length > 0) {
+            setCalendars(data.calendars);
+            setActiveCalendarId(data.calendars[0].id);
+          }
+        } catch (e) {
+          console.error("Local storage data corrupt", e);
+        }
+      }
+      
+      setIsLoading(false);
     };
     fetchData();
   }, []);
 
   const saveData = useCallback(async () => {
+    const dataObj = { tasks, calendars };
+    
+    // Always save to local storage as fallback/sync
+    localStorage.setItem('eisenhower_data', JSON.stringify(dataObj));
+    
     try {
       const res = await fetch('/api/data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tasks, calendars }),
+        body: JSON.stringify(dataObj),
       });
-      if (!res.ok) throw new Error('Failed to save');
+      if (!res.ok) throw new Error('Failed to save to server');
     } catch (e) {
-      console.error(e);
-      alert('Erro ao salvar dados no servidor. Verifique a conexão.');
+      console.warn("Could not save to server. Saved locally instead.", e);
     }
   }, [tasks, calendars]);
 
